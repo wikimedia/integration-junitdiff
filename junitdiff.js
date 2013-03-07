@@ -27,20 +27,18 @@ var xml = require( 'xmldom' ),
 	optimist = require( 'optimist' );
 
 function TestsAreGoneError( message ) {
-	Error.call( this, message );
+	this.name = 'TestsAreGoneError';
+	this.message = message;
 }
+TestsAreGoneError.prototype = Error.prototype;
 
 function findFirstNode( node, name ) {
-	while ( node !== null &&
-			node.nodeName.toLowerCase() !== name ) {
-		if ( node.nextSibling === null ) {
-			node = node.firstChild;
-		} else {
-			node = node.nextSibling;
-		}
+	if ( node.nodeType === node.ELEMENT_NODE &&
+			node.nodeName.toLowerCase() === name ) {
+		return node;
+	} else {
+		return node.getElementsByTagName( name )[0];
 	}
-
-	return node;
 }
 
 function traverse( nodeName, child, results ) {
@@ -150,101 +148,72 @@ function buildXMLResult( result ) {
 	return xmldoc;
 }
 
-// Not doing any checking or options yet, but will do in the future.
-var i, curTestDoc,
+var compare = {
+	testsuites: function ( node ) {
+		var hasRun = false,
+			results = {},
+			child = [ node[0].firstChild, node[1].firstChild ],
+			traverseFunc = traverse.bind( null, 'testsuite' );
 
-	argv = optimist.usage( 'Usage: $0 [options] <test-file-0> <test-file-1>', {
-	} )
-	.check( function ( argv ) {
-	} )
-	.argv,
-
-	testDoc = [
-		new DOMParser().parseFromString( fs.readFileSync( argv._[0], 'UTF-8' ) ),
-		new DOMParser().parseFromString( fs.readFileSync( argv._[1], 'UTF-8' ) )
-	],
-
-	curnode = [
-		testDoc[0],
-		testDoc[1]
-	],
-
-	compare = {
-		testsuites: function ( node ) {
-			var hasRun = false,
-				results = {},
-				child = [ node[0].firstChild, node[1].firstChild ],
-				traverseFunc = traverse.bind( null, 'testsuite' );
-
-			while ( child[0] !== null ) {
-				try {
-					traverseFunc( child, results );
-				} catch ( e ) {
-					if ( e instanceof TestsAreGoneError ) {
-						if ( !hasRun ) {
-							throw e;
-						}
-					} else {
+		while ( child[0] !== null ) {
+			try {
+				traverseFunc( child, results );
+			} catch ( e ) {
+				if ( e instanceof TestsAreGoneError ) {
+					if ( !hasRun ) {
 						throw e;
-					}
-				}
-
-				hasRun = true;
-			}
-
-			return results;
-		},
-
-		testsuite: function ( node, shouldCompare ) {
-			var hasRun = false,
-				results = {},
-				child = [
-					( node[0] || { firstChild: null } ).firstChild,
-					( node[1] || { firstChild: null } ).firstChild ],
-				traverseFunc = traverse.bind( null, 'testcase' );
-
-			while ( child[0] !== null ) {
-				try {
-					traverseFunc( child, results );
-				} catch ( e ) {
-					if ( e instanceof TestsAreGoneError ) {
-						if ( !hasRun ) {
-							throw e;
-						}
-					} else {
-						throw e;
-					}
-				}
-
-				hasRun = true;
-			}
-
-			return results;
-		},
-
-		testcase: function ( node, shouldCompare ) {
-			var results = {};
-
-			results.time = node[1].getAttribute( 'time' );
-			if ( shouldCompare ) {
-				if ( node[0].getElementsByTagName( 'failure' ).length === 0 ) {
-					if ( node[1].getElementsByTagName( 'failure' ).length === 0 ) {
-						results.failure = false;
-						results.skipped = false;
-					} else {
-						results.failure = true;
-						results.skipped = false;
-						results.node = node[1];
 					}
 				} else {
-					if ( node[1].getElementsByTagName( 'failure' ).length === 0 ) {
-						results.failure = false;
-						results.skipped = false;
-					} else {
-						results.failure = false;
-						results.skipped = true;
-						results.node = node[1];
+					throw e;
+				}
+			}
+
+			hasRun = true;
+		}
+
+		return results;
+	},
+
+	testsuite: function ( node, shouldCompare ) {
+		var hasRun = false,
+			results = {},
+			child = [
+				( node[0] || { firstChild: null } ).firstChild,
+				( node[1] || { firstChild: null } ).firstChild ],
+			traverseFunc = traverse.bind( null, 'testcase' );
+
+		while ( child[0] !== null ) {
+			try {
+				traverseFunc( child, results );
+			} catch ( e ) {
+				if ( e instanceof TestsAreGoneError ) {
+					if ( !hasRun ) {
+						throw e;
 					}
+				} else {
+					throw e;
+				}
+			}
+
+			hasRun = true;
+		}
+
+		return results;
+	},
+
+	testcase: function ( node, shouldCompare ) {
+		var results = {};
+
+		results.time = node[1].getAttribute( 'time' );
+		if ( shouldCompare ) {
+			if ( node[0].getElementsByTagName( 'failure' ).length === 0 ) {
+				if ( node[1].getElementsByTagName( 'failure' ).length === 0 ) {
+					results.failure = false;
+					results.skipped = false;
+				} else {
+					results.failure = true;
+					results.skipped = false;
+					results.node = node[1];
 				}
 			} else {
 				if ( node[1].getElementsByTagName( 'failure' ).length === 0 ) {
@@ -253,32 +222,63 @@ var i, curTestDoc,
 				} else {
 					results.failure = false;
 					results.skipped = true;
+					results.node = node[1];
 				}
-
-				results.node = node[1];
+			}
+		} else {
+			if ( node[1].getElementsByTagName( 'failure' ).length === 0 ) {
+				results.failure = false;
+				results.skipped = false;
+			} else {
+				results.failure = false;
+				results.skipped = true;
 			}
 
-			return results;
+			results.node = node[1];
 		}
-	};
 
-for ( i = 0; i < testDoc.length; i++ ) {
-	curTestDoc = testDoc[i];
-	testDoc[i] = findFirstNode( curTestDoc, 'testsuites' );
-}
+		return results;
+	}
+};
 
-try {
+function runMain() {
+	// Not doing any checking or options yet, but will do in the future.
+	var argv = optimist.usage( 'Usage: $0 [options] <test-file-0> <test-file-1>', {
+		} )
+		.check( function ( argv ) {
+		} )
+		.argv,
+
+		testDoc = [
+			new DOMParser().parseFromString( fs.readFileSync( argv._[0], 'UTF-8' ) ),
+			new DOMParser().parseFromString( fs.readFileSync( argv._[1], 'UTF-8' ) )
+		];
+
 	console.log(
 		new XMLSerializer().serializeToString(
-			buildXMLResult(
-				compare.testsuites( testDoc )
-			)
+			compareDOMs( testDoc[0], testDoc[1] )
 		)
 	);
-} catch ( e ) {
-	if ( e instanceof TestsAreGoneError ) {
-		console.error( 'Tests are gone!' );
-	} else {
-		throw e;
+}
+
+function compareDOMs( dom1, dom2 ) {
+	var i, res, curTestDoc,
+		testDoc = [ dom1, dom2 ];
+
+	for ( i = 0; i < testDoc.length; i++ ) {
+		curTestDoc = testDoc[i];
+		testDoc[i] = findFirstNode( curTestDoc, 'testsuites' );
 	}
+
+	res = compare.testsuites( testDoc );
+	return buildXMLResult( res );
+}
+
+if ( module instanceof Object ) {
+	module.exports.compareDOMs = compareDOMs;
+	module.exports.TestsAreGoneError = TestsAreGoneError;
+}
+
+if ( require.main === module ) {
+	runMain();
 }
