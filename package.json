@@ -2,8 +2,8 @@
 	"name": "junitdiff",
 	"version": "0.1.0",
 	"dependencies": {
-		"xmldom": "*",
-		"optimist": "*",
-		"colors": "*"
+		"xmldom": "0.1.13",
+		"optimist": "0.3.5",
+		"colors": "0.6.0"
 	}
 }
