@@ -1,0 +1,18 @@
+JUnit diff tool.
+
+Written in JavaScript, meant for use with node.js.
+
+== Installation ==
+
+$ git clone https://gerrit.wikimedia.org/r/p/integration/junitdiff.git
+$ cd junitdiff
+$ npm install
+
+== Use ==
+
+$ node junitdiff <xmlfile1> <xmlfile2>
+
+No options currently, but if there are, they'll be documented in our help text:
+
+$ node junitdiff --help
+

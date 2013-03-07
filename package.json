@@ -1,0 +1,8 @@
+{
+	"name": "junitdiff",
+	"version": "0.1.0",
+	"dependencies": {
+		"xmldom": "*",
+		"optimist": "*"
+	}
+}
